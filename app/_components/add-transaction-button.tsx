@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "./ui/button";
 import { ArrowDownUpIcon } from "lucide-react";
 import {
@@ -38,12 +38,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { TRANSACTION_CATEGORY_OPTIONS, TRANSACTION_PAYMENT_METHOD_OPTIONS, TRANSACTION_TYPE_OPTIONS } from "../_constants/transactions";
+import {
+  TRANSACTION_CATEGORY_OPTIONS,
+  TRANSACTION_PAYMENT_METHOD_OPTIONS,
+  TRANSACTION_TYPE_OPTIONS,
+} from "../_constants/transactions";
 import { DatePicker } from "./ui/date-picker";
+import { addTransaction } from "../_actions/add-transaction";
 
 const formSchema = z.object({
   name: z.string().trim().min(1, { message: "O nome é obrigatório!" }),
-  amount: z.string().trim().min(1, { message: "O valor é obrigatório!" }),
+  amount: z.number({
+    required_error: "O valor é obrigatório!"
+  }).positive({
+    message: "O valor é obrigatório!"
+  }),
+
   type: z.nativeEnum(TransactionType, {
     required_error: "O tipo é obrigatório!",
   }),
@@ -56,31 +66,43 @@ const formSchema = z.object({
   date: z.date({ required_error: "A data é obrigatória!" }),
 });
 
-type FormSchema = z.infer<typeof formSchema>
+type FormSchema = z.infer<typeof formSchema>;
 
 const AddTransactionButton = () => {
+  const [dialogIsOpen, setDialogIsOpen] = useState(false)
   const form = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      amount: "",
+      amount:0,
       type: TransactionType.EXPENSE,
       category: TransactionCategory.OTHER,
       paymentMethod: TransactionPaymentMethod.CASH,
       date: new Date(),
     },
   });
-  const onSubmit = (data: FormSchema) => {
+  const onSubmit = async (data: FormSchema) => {
     // Add the transaction to the database
-    console.log("Submitting form:", data);
+    try {
+      await addTransaction(data);
+      setDialogIsOpen(false);
+      form.reset();
+
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (
-    <Dialog onOpenChange={(open) => {
-      if(!open){
-        form.reset();
-      }
-    }}>
+    <Dialog
+    open={dialogIsOpen}
+      onOpenChange={(open) => {
+        setDialogIsOpen(open)
+        if (!open) {
+          form.reset();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button className="rounded-full font-bold">
           Adicionar Transação <ArrowDownUpIcon />
@@ -116,7 +138,13 @@ const AddTransactionButton = () => {
                 <FormItem>
                   <FormLabel>Montante</FormLabel>
                   <FormControl>
-                    <MoneyInput placeholder="Insira o valor" {...field} />
+                    <MoneyInput 
+                    placeholder="Insira o valor" 
+                    value={field.value}
+                    onBlur={field.onBlur}
+                    disabled={field.disabled}
+                      onValueChange={({floatValue}) => field.onChange(floatValue)}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -214,10 +242,12 @@ const AddTransactionButton = () => {
                 </FormItem>
               )}
             />
-            
+
             <DialogFooter>
               <DialogClose asChild>
-              <Button type="button" variant="outline">Cancelar</Button>
+                <Button type="button" variant="outline">
+                  Cancelar
+                </Button>
               </DialogClose>
               <Button type="submit">Adicionar</Button>
             </DialogFooter>
